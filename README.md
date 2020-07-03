@@ -1,0 +1,100 @@
+# Ceph RADOSGW Exporter
+
+[Prometheus](https://prometheus.io/) exporter that scrapes
+[Ceph](http://ceph.com/) RADOSGW usage information (operations and buckets) and quotas.
+This information is gathered from a RADOSGW using the
+[Admin Operations API](http://docs.ceph.com/docs/master/radosgw/adminops/).
+
+This exporter was based off from both
+[radosgw_exporter](https://github.com/blemmenes/radosgw_exporter)
+ and [radosgw_quota_exporter](https://github.com/hclareth7/radosgw_quota_exporter).
+
+Changes:
+* fixed bugs;
+* added quotas information;
+* moved scraping to thread to avoid timeout error during Prometheus scraping;
+* moved code to python 3.
+
+
+## Requirements
+
+* Working Ceph Cluster with Object Gateways setup.
+* Ceph RADOSGWs must beconfigured to gather usage information as this is not
+on by default. The miniumum is to enable it via `ceph.conf` as below. There are
+however other options that are available and should be considered
+[here](http://docs.ceph.com/docs/master/radosgw/config-ref/).
+```
+rgw enable usage log = true
+```
+
+* Configure admin entry point (default is 'admin'):
+```
+rgw admin entry = "admin"
+```
+
+* Enable admin API (default is enabled):
+```
+rgw enable apis = "s3, admin"
+```
+
+* This exporter requires a user that has a capability of `usage=read` and
+`buckets=read` see the Admin Guide
+[here](http://docs.ceph.com/docs/master/radosgw/admin/#add-remove-admin-capabilities)
+for more details.
+
+**Note:** If using a loadbalancer in front of your RADOSGWs, please make sure your timeouts are set appropriately as clusters with a large number of buckets, or large number of users+buckets could cause the usage query to exceed the loadbalancer timeout. 
+
+For haproxy the timeout in question is `timeout server`
+
+
+## Local Installation
+```
+git clone git@github.com:lonsofore/radosgw_exporter.git
+cd radosgw_exporter
+pip install requirements.txt
+```
+
+### Usage
+```
+usage: radosgw_exporter.py [-h] [-H HOST] [-e ADMIN_ENTRY]
+                                 [-a ACCESS_KEY] [-s SECRET_KEY] [-p PORT]
+
+RADOSGW address and local binding port as well as S3 access_key and secret_key
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -H HOST, --host HOST  Server URL for the RADOSGW api (example:
+                        http://objects.dreamhost.com/)
+  -e ADMIN_ENTRY, --admin_entry ADMIN_ENTRY
+                        The entry point for an admin request URL [default is
+                        'admin']
+  -a ACCESS_KEY, --access_key ACCESS_KEY
+                        S3 access key
+  -s SECRET_KEY, --secret_key SECRET_KEY
+                        S3 secrest key
+  -p PORT, --port PORT  Port to listen
+```
+
+### Example
+```
+./check_ceph_rgw_api -H https://objects.dreamhost.com/ -a JXUABTZZYHAFLCMF9VYV -s jjP8RDD0R156atS6ACSy2vNdJLdEPM0TJQ5jD1pw
+```
+
+## Docker Usage
+Docker build (https://hub.docker.com/r/lonsofore/radosgw_exporter/):
+```
+docker run -d -p 9242 lonsofore/radosgw_exporter:latest \
+-H <RADOSGW HOST> -a <ACCESS_KEY> -s <SECRET_KEY> -p 9242
+```
+Arguments can also be specified by environment variables as well.
+```
+docker run -d -p 9242:9242 \
+-e "RADOSGW_SERVER=<host>" \
+-e "VIRTUAL_PORT=9242" \
+-e "ACCESS_KEY=<access_key>" \
+-e "SECRET_KEY=<secret_key>" \
+lonsofore/radosgw_exporter:latest
+```
+
+Resulting metrics can be then retrieved via your Prometheus server via the
+`http://<exporter host>:9242/metrics` endpoint.
